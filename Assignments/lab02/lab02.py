@@ -36,7 +36,9 @@ class MRIprocessor:
         Returns:
             np.ndarray: 2D float array, log(|f_shifted| + 1).
         """
-        raise NotImplementedError("Implement this method")
+
+        magnitude = np.abs(f_shifted)
+        return np.log(magnitude + 1)
 
     def reconstruct(self, f_shifted):
         """Step 2 — convert centred k-space data back into a spatial image.
@@ -47,7 +49,11 @@ class MRIprocessor:
         Returns:
             np.ndarray: 2D float image (magnitude), centred.
         """
-        raise NotImplementedError("Implement this method")
+        unshifted = np.fft.ifftshift(f_shifted)
+        img_complex = np.fft.ifft2(unshifted)
+
+        img_centred = np.fft.fftshift(img_complex)
+        return np.abs(img_centred)
 
     def get_noise_peaks(self):
         """Step 3 — the (row, col) positions of the two noise spikes.
@@ -58,7 +64,10 @@ class MRIprocessor:
         Returns:
             list of (int, int): [(row, col), (row, col)]
         """
-        raise NotImplementedError("Implement this method")
+        
+        peak_a = (148, 147)
+        peak_b = (108, 109)
+        return [peak_a, peak_b]
 
     def make_notch_mask(self, centres, radius=2):
         """Step 4 — a mask of ones with a zeroed disc around each centre.
@@ -70,7 +79,17 @@ class MRIprocessor:
         Returns:
             np.ndarray: float array of shape self.shape, values 0 or 1.
         """
-        raise NotImplementedError("Implement this method")
+        n_rows, n_cols = self.shape
+
+        mask = np.ones((n_rows, n_cols))
+
+        row_idx, col_idx = np.ogrid[:n_rows, :n_cols]
+
+        for r0, c0 in centres:
+            dist = np.sqrt((row_idx - r0) ** 2 + (col_idx - c0) ** 2)
+            mask[dist <= radius] = 0
+
+        return mask
 
     def remove_noise(self, f_shifted):
         """Step 5 — remove the noise using the methods above.
@@ -81,4 +100,13 @@ class MRIprocessor:
         Returns:
             tuple: (filtered_img, corrupted_img, fourier_img, mask)
         """
-        raise NotImplementedError("Implement this method")
+        fourier_img = self.fourier_magnitude(f_shifted)
+
+        corrupted_img = self.reconstruct(f_shifted)
+ 
+        peaks = self.get_noise_peaks()
+        mask = self.make_notch_mask(peaks)
+
+        filtered_img = self.reconstruct(f_shifted * mask)
+
+        return filtered_img, corrupted_img, fourier_img, mask
